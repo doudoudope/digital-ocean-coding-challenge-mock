@@ -21,7 +21,7 @@ def test_upload_response_shape(client, tmp_upload_dir):
     response = client.post("/documents", files=txt_file())
     body = response.json()
     assert "document_id" in body
-    assert body["status"] == "pending"
+    assert body["status"] == "completed"
 
 
 def test_upload_response_document_id_is_uuid(client, tmp_upload_dir):
@@ -59,7 +59,7 @@ def test_upload_stores_correct_metadata(client, tmp_upload_dir, db_session):
     assert doc.filename == "test.txt"
     assert doc.file_size == len(content.encode())
     assert doc.content_type == "text/plain"
-    assert doc.status == "pending"
+    assert doc.status == "completed"
 
 
 def test_upload_sets_timestamps(client, tmp_upload_dir, db_session):
@@ -91,3 +91,60 @@ def test_upload_file_content_is_preserved(client, tmp_upload_dir):
 
     saved = tmp_upload_dir / f"{document_id}.txt"
     assert saved.read_bytes() == content.encode()
+
+
+# ---------------------------------------------------------------------------
+# GET /documents/{id}/result — happy path
+# ---------------------------------------------------------------------------
+
+def test_get_result_returns_200(client, tmp_upload_dir):
+    document_id = client.post("/documents", files=txt_file()).json()["document_id"]
+    response = client.get(f"/documents/{document_id}/result")
+    assert response.status_code == 200
+
+
+def test_get_result_shape(client, tmp_upload_dir):
+    document_id = client.post("/documents", files=txt_file()).json()["document_id"]
+    body = client.get(f"/documents/{document_id}/result").json()
+    assert "word_count" in body
+    assert "line_count" in body
+    assert "keywords" in body
+    assert "summary" in body
+
+
+def test_get_result_word_count(client, tmp_upload_dir):
+    document_id = client.post("/documents", files=txt_file("one two three four")).json()["document_id"]
+    body = client.get(f"/documents/{document_id}/result").json()
+    assert body["word_count"] == 4
+
+
+def test_get_result_line_count(client, tmp_upload_dir):
+    document_id = client.post("/documents", files=txt_file("line one\nline two\nline three")).json()["document_id"]
+    body = client.get(f"/documents/{document_id}/result").json()
+    assert body["line_count"] == 3
+
+
+def test_get_result_keywords_is_list(client, tmp_upload_dir):
+    document_id = client.post("/documents", files=txt_file("python api database python")).json()["document_id"]
+    body = client.get(f"/documents/{document_id}/result").json()
+    assert isinstance(body["keywords"], list)
+
+
+def test_get_result_summary_is_placeholder(client, tmp_upload_dir):
+    document_id = client.post("/documents", files=txt_file()).json()["document_id"]
+    body = client.get(f"/documents/{document_id}/result").json()
+    assert body["summary"] == "placeholder"
+
+
+# ---------------------------------------------------------------------------
+# GET /documents/{id}/result — error cases
+# ---------------------------------------------------------------------------
+
+def test_get_result_not_found(client, tmp_upload_dir):
+    response = client.get("/documents/nonexistent-id/result")
+    assert response.status_code == 404
+
+
+def test_get_result_not_found_has_detail(client, tmp_upload_dir):
+    response = client.get("/documents/nonexistent-id/result")
+    assert "detail" in response.json()

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from app.api.documents import router as documents_router
 from app.api.health import router as health_router
 from app.models import document as _document_models  # noqa: F401 - register with Base
+from app.models import result as _result_models  # noqa: F401 - register with Base
 from app.models.db import init_db
 
 logging.basicConfig(
