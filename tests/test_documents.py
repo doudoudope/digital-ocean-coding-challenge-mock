@@ -21,7 +21,7 @@ def test_upload_response_shape(client, tmp_upload_dir):
     response = client.post("/documents", files=txt_file())
     body = response.json()
     assert "document_id" in body
-    assert body["status"] == "completed"
+    assert body["status"] == "pending"
 
 
 def test_upload_response_document_id_is_uuid(client, tmp_upload_dir):

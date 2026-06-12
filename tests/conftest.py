@@ -27,6 +27,18 @@ def setup_test_db():
     Base.metadata.drop_all(bind=engine)
 
 
+@pytest.fixture(autouse=True)
+def celery_eager(monkeypatch):
+    from app.celery_app import celery as celery_app
+    celery_app.conf.task_always_eager = True
+    celery_app.conf.task_eager_propagates = True
+    # Route the Celery task's DB session to the test database
+    monkeypatch.setattr("app.tasks.document_tasks.SessionLocal", TestingSessionLocal)
+    yield
+    celery_app.conf.task_always_eager = False
+    celery_app.conf.task_eager_propagates = False
+
+
 @pytest.fixture
 def client():
     app.dependency_overrides[get_db] = override_get_db
