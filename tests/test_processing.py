@@ -61,3 +61,36 @@ def test_empty_content():
     assert result["word_count"] == 0
     assert result["line_count"] == 0
     assert result["summary"] == "placeholder"
+
+
+def test_keywords_strips_punctuation():
+    result = process("python, api. database!")
+    keywords = json.loads(result["keywords"])
+    assert "python" in keywords
+    assert "api" in keywords
+    assert "database" in keywords
+
+
+def test_keywords_excludes_short_words():
+    # Words with 2 or fewer chars are filtered out
+    result = process("is it go do up at")
+    keywords = json.loads(result["keywords"])
+    assert "is" not in keywords
+    assert "it" not in keywords
+    assert "go" not in keywords
+
+
+def test_keywords_capped_at_ten():
+    # Generate 15 unique words, each appearing once
+    words = " ".join(f"word{i}word" for i in range(15))
+    result = process(words)
+    keywords = json.loads(result["keywords"])
+    assert len(keywords) <= 10
+
+
+def test_keywords_case_insensitive():
+    result = process("Python PYTHON python")
+    keywords = json.loads(result["keywords"])
+    assert "python" in keywords
+    assert "Python" not in keywords
+    assert "PYTHON" not in keywords

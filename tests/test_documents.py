@@ -150,6 +150,27 @@ def test_get_result_not_found_has_detail(client, tmp_upload_dir):
     assert "detail" in response.json()
 
 
+def test_get_result_returns_409_when_not_completed(client, db_session):
+    from datetime import datetime, timezone
+    from app.models.document import Document
+
+    doc = Document(
+        id="pending-doc-id",
+        filename="pending.txt",
+        file_size=10,
+        content_type="text/plain",
+        status="pending",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    response = client.get("/documents/pending-doc-id/result")
+    assert response.status_code == 409
+    assert "detail" in response.json()
+
+
 # ---------------------------------------------------------------------------
 # GET /documents/{id} — document metadata
 # ---------------------------------------------------------------------------
