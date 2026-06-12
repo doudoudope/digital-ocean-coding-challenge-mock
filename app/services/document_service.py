@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.document import Document
 from app.models.result import DocumentResult
 from app.repositories import document_repo, result_repo
-from app.schemas.document import DocumentUploadResponse
+from app.schemas.document import DocumentListResponse, DocumentUploadResponse
 from app.services import processing_service
 from app.storage import local_storage
 
@@ -39,3 +39,13 @@ async def upload_document(file: UploadFile, db: Session) -> DocumentUploadRespon
     document_repo.update_status(db, document_id, "completed")
 
     return DocumentUploadResponse(document_id=document_id, status="completed")
+
+
+def list_documents(
+    db: Session,
+    page: int,
+    page_size: int,
+    status: str | None,
+) -> DocumentListResponse:
+    items, total = document_repo.list_documents(db, page, page_size, status)
+    return DocumentListResponse(items=items, total=total, page=page, page_size=page_size)

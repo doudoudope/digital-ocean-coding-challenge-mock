@@ -148,3 +148,117 @@ def test_get_result_not_found(client, tmp_upload_dir):
 def test_get_result_not_found_has_detail(client, tmp_upload_dir):
     response = client.get("/documents/nonexistent-id/result")
     assert "detail" in response.json()
+
+
+# ---------------------------------------------------------------------------
+# GET /documents/{id} — document metadata
+# ---------------------------------------------------------------------------
+
+def test_get_document_returns_200(client, tmp_upload_dir):
+    document_id = client.post("/documents", files=txt_file()).json()["document_id"]
+    response = client.get(f"/documents/{document_id}")
+    assert response.status_code == 200
+
+
+def test_get_document_returns_all_fields(client, tmp_upload_dir):
+    document_id = client.post("/documents", files=txt_file()).json()["document_id"]
+    body = client.get(f"/documents/{document_id}").json()
+    assert body["document_id"] == document_id
+    assert body["filename"] == "test.txt"
+    assert body["file_size"] == len("hello world".encode())
+    assert body["content_type"] == "text/plain"
+    assert body["status"] == "completed"
+    assert "created_at" in body
+    assert "updated_at" in body
+
+
+def test_get_document_not_found(client, tmp_upload_dir):
+    response = client.get("/documents/nonexistent-id")
+    assert response.status_code == 404
+
+
+def test_get_document_not_found_has_detail(client, tmp_upload_dir):
+    response = client.get("/documents/nonexistent-id")
+    assert "detail" in response.json()
+
+
+# ---------------------------------------------------------------------------
+# GET /documents/{id}/status
+# ---------------------------------------------------------------------------
+
+def test_get_status_returns_200(client, tmp_upload_dir):
+    document_id = client.post("/documents", files=txt_file()).json()["document_id"]
+    response = client.get(f"/documents/{document_id}/status")
+    assert response.status_code == 200
+
+
+def test_get_status_returns_completed(client, tmp_upload_dir):
+    document_id = client.post("/documents", files=txt_file()).json()["document_id"]
+    body = client.get(f"/documents/{document_id}/status").json()
+    assert body == {"status": "completed"}
+
+
+def test_get_status_not_found(client, tmp_upload_dir):
+    response = client.get("/documents/nonexistent-id/status")
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /documents — list + pagination + filter
+# ---------------------------------------------------------------------------
+
+def test_list_returns_200(client, tmp_upload_dir):
+    response = client.get("/documents")
+    assert response.status_code == 200
+
+
+def test_list_response_shape(client, tmp_upload_dir):
+    body = client.get("/documents").json()
+    assert "items" in body
+    assert "total" in body
+    assert "page" in body
+    assert "page_size" in body
+
+
+def test_list_returns_uploaded_documents(client, tmp_upload_dir):
+    client.post("/documents", files=txt_file())
+    client.post("/documents", files=txt_file())
+    body = client.get("/documents").json()
+    assert body["total"] == 2
+    assert len(body["items"]) == 2
+
+
+def test_list_default_pagination(client, tmp_upload_dir):
+    body = client.get("/documents").json()
+    assert body["page"] == 1
+    assert body["page_size"] == 20
+
+
+def test_list_pagination_limits_items(client, tmp_upload_dir):
+    for _ in range(3):
+        client.post("/documents", files=txt_file())
+    body = client.get("/documents?page=1&page_size=2").json()
+    assert len(body["items"]) == 2
+    assert body["total"] == 3
+    assert body["page_size"] == 2
+
+
+def test_list_page_2(client, tmp_upload_dir):
+    for _ in range(3):
+        client.post("/documents", files=txt_file())
+    body = client.get("/documents?page=2&page_size=2").json()
+    assert len(body["items"]) == 1
+
+
+def test_list_filter_by_status(client, tmp_upload_dir):
+    client.post("/documents", files=txt_file())
+    body = client.get("/documents?status=completed").json()
+    assert body["total"] >= 1
+    assert all(item["status"] == "completed" for item in body["items"])
+
+
+def test_list_filter_by_status_no_match(client, tmp_upload_dir):
+    client.post("/documents", files=txt_file())
+    body = client.get("/documents?status=pending").json()
+    assert body["total"] == 0
+    assert body["items"] == []
