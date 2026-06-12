@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Runtime data
+*.db
+uploads/
+
+# Dev / test
+tests/
+docs/
+.env
+.claude/
+
+# Scratch files
+test.txt
+big.txt
