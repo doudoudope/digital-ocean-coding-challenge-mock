@@ -1,0 +1,15 @@
+# Runtime data
+*.db
+uploads/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Local tooling
+.claude/
+
+# Scratch files
+test.txt
