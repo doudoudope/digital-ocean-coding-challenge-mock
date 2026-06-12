@@ -1,6 +1,5 @@
 import uuid
 
-from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from app.models.document import Document
@@ -11,17 +10,21 @@ from app.services import processing_service
 from app.storage import local_storage
 
 
-async def upload_document(file: UploadFile, db: Session) -> DocumentUploadResponse:
-    content = await file.read()
+def upload_document(
+    filename: str,
+    content_type: str,
+    content: bytes,
+    db: Session,
+) -> DocumentUploadResponse:
     document_id = str(uuid.uuid4())
 
     local_storage.save_file(document_id, content)
 
     document = Document(
         id=document_id,
-        filename=file.filename,
+        filename=filename,
         file_size=len(content),
-        content_type=file.content_type or "text/plain",
+        content_type=content_type,
         status="pending",
     )
     document_repo.create(db, document)

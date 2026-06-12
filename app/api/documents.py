@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.db import get_db
 from app.repositories import document_repo, result_repo
 from app.schemas.document import DocumentListResponse, DocumentResponse, DocumentUploadResponse
@@ -9,13 +10,33 @@ from app.services import document_service
 
 router = APIRouter(prefix="/documents")
 
+_ALLOWED_EXTENSIONS = {".txt"}
+_MAX_BYTES = settings.max_file_size_mb * 1024 * 1024
+
 
 @router.post("", response_model=DocumentUploadResponse, status_code=201)
 async def upload_document(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    return await document_service.upload_document(file, db)
+    filename = file.filename or ""
+    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '{ext}'. Only .txt files are accepted.")
+
+    content = await file.read()
+    if len(content) > _MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File size {len(content)} bytes exceeds the {settings.max_file_size_mb} MB limit.",
+        )
+
+    return document_service.upload_document(
+        filename=filename,
+        content_type=file.content_type or "text/plain",
+        content=content,
+        db=db,
+    )
 
 
 @router.get("", response_model=DocumentListResponse)

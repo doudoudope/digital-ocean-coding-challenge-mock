@@ -262,3 +262,54 @@ def test_list_filter_by_status_no_match(client, tmp_upload_dir):
     body = client.get("/documents?status=pending").json()
     assert body["total"] == 0
     assert body["items"] == []
+
+
+# ---------------------------------------------------------------------------
+# M5 — file type validation (400)
+# ---------------------------------------------------------------------------
+
+def bad_file(name: str, mime: str) -> dict:
+    return {"file": (name, io.BytesIO(b"data"), mime)}
+
+
+def test_upload_rejects_pdf(client, tmp_upload_dir):
+    response = client.post("/documents", files=bad_file("report.pdf", "application/pdf"))
+    assert response.status_code == 400
+
+
+def test_upload_rejects_jpg(client, tmp_upload_dir):
+    response = client.post("/documents", files=bad_file("photo.jpg", "image/jpeg"))
+    assert response.status_code == 400
+
+
+def test_upload_rejects_no_extension(client, tmp_upload_dir):
+    response = client.post("/documents", files=bad_file("noextension", "text/plain"))
+    assert response.status_code == 400
+
+
+def test_upload_bad_type_returns_detail(client, tmp_upload_dir):
+    response = client.post("/documents", files=bad_file("report.pdf", "application/pdf"))
+    assert "detail" in response.json()
+
+
+# ---------------------------------------------------------------------------
+# M5 — file size validation (413)
+# ---------------------------------------------------------------------------
+
+def test_upload_rejects_oversized_file(client, tmp_upload_dir, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "max_file_size_mb", 0)
+    # Force re-evaluation of the limit inside the router module
+    import app.api.documents as docs_module
+    monkeypatch.setattr(docs_module, "_MAX_BYTES", 0)
+    response = client.post("/documents", files=txt_file("any content"))
+    assert response.status_code == 413
+
+
+def test_upload_oversized_returns_detail(client, tmp_upload_dir, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "max_file_size_mb", 0)
+    import app.api.documents as docs_module
+    monkeypatch.setattr(docs_module, "_MAX_BYTES", 0)
+    response = client.post("/documents", files=txt_file("any content"))
+    assert "detail" in response.json()
