@@ -1,3 +1,4 @@
+import base64
 import logging
 
 from app.celery_app import celery
@@ -10,11 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 @celery.task(bind=True, max_retries=3, default_retry_delay=60)
-def process_document(self, document_id: str, file_path: str) -> None:
+def process_document(self, document_id: str, content_b64: str) -> None:
     db = SessionLocal()
     try:
-        with open(file_path, "rb") as f:
-            content = f.read()
+        content = base64.b64decode(content_b64)
 
         result_data = processing_service.process(content.decode("utf-8", errors="replace"))
 

@@ -1,3 +1,4 @@
+import base64
 import uuid
 
 from sqlalchemy.orm import Session
@@ -15,7 +16,7 @@ def upload_document(
     db: Session,
 ) -> DocumentUploadResponse:
     document_id = str(uuid.uuid4())
-    file_path = local_storage.save_file(document_id, content)
+    local_storage.save_file(document_id, content)
 
     document = Document(
         id=document_id,
@@ -26,9 +27,12 @@ def upload_document(
     )
     document_repo.create(db, document)
 
+    # Encode content as base64 string so it passes over Redis without filesystem dependency
+    content_b64 = base64.b64encode(content).decode("ascii")
+
     # Import here to avoid circular imports at module load time
     from app.tasks.document_tasks import process_document
-    process_document.delay(document_id, file_path)
+    process_document.delay(document_id, content_b64)
 
     return DocumentUploadResponse(document_id=document_id, status="pending")
 
