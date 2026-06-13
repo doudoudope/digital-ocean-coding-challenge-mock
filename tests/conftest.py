@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -5,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.main import app
 from app.models.db import Base, get_db
+from app.models.user import User
 
 TEST_DATABASE_URL = "sqlite:///./test.db"
 
@@ -41,19 +44,10 @@ def celery_eager(monkeypatch):
     from app.celery_app import celery as celery_app
     celery_app.conf.task_always_eager = True
     celery_app.conf.task_eager_propagates = True
-    # Route the Celery task's DB session to the test database
     monkeypatch.setattr("app.tasks.document_tasks.SessionLocal", TestingSessionLocal)
     yield
     celery_app.conf.task_always_eager = False
     celery_app.conf.task_eager_propagates = False
-
-
-@pytest.fixture
-def client():
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -63,6 +57,28 @@ def db_session():
         yield db
     finally:
         db.close()
+
+
+@pytest.fixture
+def test_user(db_session):
+    user = User(
+        id=str(uuid.uuid4()),
+        api_key="sk-testkey1234567890abcdef12345678",
+        tier="paid",  # paid avoids quota limits; individual tests can override
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def client(test_user):
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app, headers={"X-API-Key": test_user.api_key}) as c:
+        yield c
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture

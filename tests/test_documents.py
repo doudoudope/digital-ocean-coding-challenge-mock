@@ -150,12 +150,13 @@ def test_get_result_not_found_has_detail(client, tmp_upload_dir):
     assert "detail" in response.json()
 
 
-def test_get_result_returns_409_when_not_completed(client, db_session):
+def test_get_result_returns_409_when_not_completed(client, db_session, test_user):
     from datetime import datetime, timezone
     from app.models.document import Document
 
     doc = Document(
         id="pending-doc-id",
+        user_id=test_user.id,
         filename="pending.txt",
         file_size=10,
         content_type="text/plain",
@@ -319,19 +320,16 @@ def test_upload_bad_type_returns_detail(client, tmp_upload_dir):
 
 def test_upload_rejects_oversized_file(client, tmp_upload_dir, monkeypatch):
     from app.config import settings
-    monkeypatch.setattr(settings, "max_file_size_mb", 0)
-    # Force re-evaluation of the limit inside the router module
-    import app.api.documents as docs_module
-    monkeypatch.setattr(docs_module, "_MAX_BYTES", 0)
+    monkeypatch.setattr(settings, "free_max_file_size_mb", 0)
+    monkeypatch.setattr(settings, "paid_max_file_size_mb", 0)
     response = client.post("/documents", files=txt_file("any content"))
     assert response.status_code == 413
 
 
 def test_upload_oversized_returns_detail(client, tmp_upload_dir, monkeypatch):
     from app.config import settings
-    monkeypatch.setattr(settings, "max_file_size_mb", 0)
-    import app.api.documents as docs_module
-    monkeypatch.setattr(docs_module, "_MAX_BYTES", 0)
+    monkeypatch.setattr(settings, "free_max_file_size_mb", 0)
+    monkeypatch.setattr(settings, "paid_max_file_size_mb", 0)
     response = client.post("/documents", files=txt_file("any content"))
     assert "detail" in response.json()
 
@@ -387,3 +385,128 @@ def test_get_result_cache_failure_falls_back_to_db(client, tmp_upload_dir, mock_
     document_id = client.post("/documents", files=txt_file()).json()["document_id"]
     response = client.get(f"/documents/{document_id}/result")
     assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Authentication — API Key validation
+# ---------------------------------------------------------------------------
+
+def test_upload_requires_api_key(tmp_upload_dir):
+    from fastapi.testclient import TestClient
+    from app.main import app as _app
+    from app.models.db import get_db
+
+    _app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(_app) as c:
+            response = c.post("/documents", files=txt_file())
+        assert response.status_code == 422  # missing required header
+    finally:
+        _app.dependency_overrides.clear()
+
+
+def test_upload_rejects_invalid_api_key(tmp_upload_dir):
+    from fastapi.testclient import TestClient
+    from app.main import app as _app
+    from app.models.db import get_db
+
+    _app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(_app, headers={"X-API-Key": "sk-invalid"}) as c:
+            response = c.post("/documents", files=txt_file())
+        assert response.status_code == 401
+    finally:
+        _app.dependency_overrides.clear()
+
+
+def test_get_result_requires_api_key(tmp_upload_dir):
+    from fastapi.testclient import TestClient
+    from app.main import app as _app
+    from app.models.db import get_db
+
+    _app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(_app) as c:
+            response = c.get("/documents/any-id/result")
+        assert response.status_code == 422
+    finally:
+        _app.dependency_overrides.clear()
+
+
+def test_get_document_rejects_other_users_doc(client, tmp_upload_dir, db_session):
+    from datetime import datetime, timezone
+    import uuid as _uuid
+    from app.models.document import Document
+    from app.models.user import User
+
+    other_user = User(
+        id=str(_uuid.uuid4()),
+        api_key="sk-otheruser0000000000000000000000",
+        tier="free",
+        is_active=True,
+    )
+    db_session.add(other_user)
+
+    doc = Document(
+        id="other-doc-id",
+        user_id=other_user.id,
+        filename="other.txt",
+        file_size=5,
+        content_type="text/plain",
+        status="completed",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    response = client.get("/documents/other-doc-id")
+    assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Authentication — free-tier quota
+# ---------------------------------------------------------------------------
+
+def test_free_user_upload_quota_enforced(tmp_upload_dir, db_session):
+    from fastapi.testclient import TestClient
+    import uuid as _uuid
+    from unittest.mock import MagicMock
+    from app.main import app as _app
+    from app.models.db import get_db
+    from app.models.user import User
+
+    free_user = User(
+        id=str(_uuid.uuid4()),
+        api_key="sk-freeuser000000000000000000000000",
+        tier="free",
+        is_active=True,
+    )
+    db_session.add(free_user)
+    db_session.commit()
+
+    # Simulate quota already at limit
+    mock = MagicMock()
+    mock.get.side_effect = lambda key: str(10) if key.startswith("quota:") else None
+
+    import app.cache as _cache
+    original = _cache.redis_client
+    _cache.redis_client = mock
+
+    _app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(_app, headers={"X-API-Key": free_user.api_key}) as c:
+            response = c.post("/documents", files=txt_file())
+        assert response.status_code == 429
+    finally:
+        _app.dependency_overrides.clear()
+        _cache.redis_client = original
+
+
+def override_get_db():
+    from tests.conftest import TestingSessionLocal
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

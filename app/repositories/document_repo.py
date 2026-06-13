@@ -21,8 +21,11 @@ def list_documents(
     page: int,
     page_size: int,
     status: str | None = None,
+    user_id: str | None = None,
 ) -> tuple[list[Document], int]:
     query = db.query(Document)
+    if user_id is not None:
+        query = query.filter(Document.user_id == user_id)
     if status is not None:
         query = query.filter(Document.status == status)
     total = query.count()

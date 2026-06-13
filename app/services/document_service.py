@@ -20,6 +20,7 @@ def upload_document(
     filename: str,
     content_type: str,
     content: bytes,
+    user_id: str,
     db: Session,
 ) -> DocumentUploadResponse:
     document_id = str(uuid.uuid4())
@@ -27,6 +28,7 @@ def upload_document(
 
     document = Document(
         id=document_id,
+        user_id=user_id,
         filename=filename,
         file_size=len(content),
         content_type=content_type,
@@ -73,6 +75,7 @@ def list_documents(
     page: int,
     page_size: int,
     status: str | None,
+    user_id: str | None = None,
 ) -> DocumentListResponse:
-    items, total = document_repo.list_documents(db, page, page_size, status)
+    items, total = document_repo.list_documents(db, page, page_size, status, user_id)
     return DocumentListResponse(items=items, total=total, page=page, page_size=page_size)

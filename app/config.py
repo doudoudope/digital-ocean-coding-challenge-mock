@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     max_file_size_mb: int = 10
     redis_url: str = "redis://localhost:6379/0"
 
+    free_max_file_size_mb: int = 2
+    paid_max_file_size_mb: int = 50
+    free_daily_upload_limit: int = 10
+
     @field_validator("database_url")
     @classmethod
     def fix_postgres_scheme(cls, v: str) -> str:
