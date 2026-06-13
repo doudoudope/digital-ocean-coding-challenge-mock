@@ -2,24 +2,30 @@
 
 A production-style REST API for uploading, processing, and querying text documents. Built as a DigitalOcean App Platform coding challenge.
 
-## Architecture
+## High Level Design
 
 ```
 Client
   │
+  │  X-API-Key header
   ▼
-FastAPI (Web Service)
-  ├── PostgreSQL       — document metadata, results, users
-  ├── Redis (Valkey)   — async task queue, result cache, daily quota
-  └── Celery (Worker)  — background document processing
+FastAPI Web Service ──── PostgreSQL (users, documents, results)
+  │         │
+  │         └─────────── Redis
+  │                        ├── Task queue (Celery broker)
+  │                        ├── Result cache (Cache Aside, TTL 1h)
+  │                        ├── User cache (TTL 5min)
+  │                        └── Daily upload quota (INCR, TTL 24h)
+  │
+  └── Celery Worker (async)
+        └── Processes document → writes result → updates status
 ```
 
-**Key design decisions:**
-- Document processing runs asynchronously via Celery so uploads return immediately
-- File content is base64-encoded in the task message — no shared filesystem between Web and Worker containers
-- Cache Aside pattern for GET /result — Redis TTL 1 hour, falls back to DB on miss
-- API key auth with per-user Redis cache (TTL 5 min) to avoid DB lookup on every request
-- Daily upload quota stored in Redis (`INCR` + `EXPIRE 86400`) — fast atomic increments
+**Upload flow:** POST /documents returns immediately with `status: pending`. The worker processes the file asynchronously; clients poll GET /status or fetch GET /result once complete.
+
+**Auth flow:** Every request validates `X-API-Key` → Redis user cache → PostgreSQL fallback. Free-tier users have a daily upload quota enforced via Redis atomic increment.
+
+**No shared filesystem:** File content is base64-encoded into the Celery task message so the Web and Worker containers are fully independent.
 
 ## API
 
