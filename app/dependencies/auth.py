@@ -23,10 +23,12 @@ def get_current_user(
     try:
         raw = cache.redis_client.get(f"user:{x_api_key}")
         if raw:
+            logger.info("user cache hit for key ...%s", x_api_key[-6:])
             return CurrentUser.model_validate_json(raw)
     except Exception as exc:
         logger.warning("user cache read failed: %s", exc)
 
+    logger.info("user cache miss, querying DB for key ...%s", x_api_key[-6:])
     user = user_repo.get_by_api_key(db, x_api_key)
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid or inactive API key")
@@ -34,6 +36,7 @@ def get_current_user(
     current_user = CurrentUser.model_validate(user)
     try:
         cache.redis_client.setex(f"user:{x_api_key}", _USER_CACHE_TTL, current_user.model_dump_json())
+        logger.info("user cached (ttl=%ds) for key ...%s", _USER_CACHE_TTL, x_api_key[-6:])
     except Exception as exc:
         logger.warning("user cache write failed: %s", exc)
 
