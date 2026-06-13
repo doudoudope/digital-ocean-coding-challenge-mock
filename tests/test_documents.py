@@ -334,3 +334,56 @@ def test_upload_oversized_returns_detail(client, tmp_upload_dir, monkeypatch):
     monkeypatch.setattr(docs_module, "_MAX_BYTES", 0)
     response = client.post("/documents", files=txt_file("any content"))
     assert "detail" in response.json()
+
+
+# ---------------------------------------------------------------------------
+# Cache — GET /documents/{id}/result
+# ---------------------------------------------------------------------------
+
+def test_get_result_cache_miss_queries_db(client, tmp_upload_dir, mock_cache):
+    mock_cache.get.return_value = None
+    document_id = client.post("/documents", files=txt_file()).json()["document_id"]
+    response = client.get(f"/documents/{document_id}/result")
+    assert response.status_code == 200
+    assert mock_cache.setex.called
+
+
+def test_get_result_cache_stores_correct_ttl(client, tmp_upload_dir, mock_cache):
+    mock_cache.get.return_value = None
+    document_id = client.post("/documents", files=txt_file()).json()["document_id"]
+    client.get(f"/documents/{document_id}/result")
+    ttl = mock_cache.setex.call_args[0][1]
+    assert ttl == 3600
+
+
+def test_get_result_cache_stores_correct_key(client, tmp_upload_dir, mock_cache):
+    mock_cache.get.return_value = None
+    document_id = client.post("/documents", files=txt_file()).json()["document_id"]
+    client.get(f"/documents/{document_id}/result")
+    cache_key = mock_cache.setex.call_args[0][0]
+    assert cache_key == f"result:{document_id}"
+
+
+def test_get_result_cache_hit_returns_correct_data(client, tmp_upload_dir, mock_cache):
+    mock_cache.get.return_value = None
+    document_id = client.post("/documents", files=txt_file("hello world")).json()["document_id"]
+
+    # First call: cache miss — capture what was stored
+    client.get(f"/documents/{document_id}/result")
+    stored_json = mock_cache.setex.call_args[0][2]
+
+    # Second call: simulate cache hit
+    mock_cache.get.return_value = stored_json
+    response = client.get(f"/documents/{document_id}/result")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["word_count"] == 2
+    assert isinstance(body["keywords"], list)
+
+
+def test_get_result_cache_failure_falls_back_to_db(client, tmp_upload_dir, mock_cache):
+    mock_cache.get.side_effect = Exception("Redis down")
+    mock_cache.setex.side_effect = Exception("Redis down")
+    document_id = client.post("/documents", files=txt_file()).json()["document_id"]
+    response = client.get(f"/documents/{document_id}/result")
+    assert response.status_code == 200

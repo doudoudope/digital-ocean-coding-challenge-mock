@@ -28,6 +28,15 @@ def setup_test_db():
 
 
 @pytest.fixture(autouse=True)
+def mock_cache(monkeypatch):
+    from unittest.mock import MagicMock
+    mock = MagicMock()
+    mock.get.return_value = None  # default: cache miss
+    monkeypatch.setattr("app.cache.redis_client", mock)
+    return mock
+
+
+@pytest.fixture(autouse=True)
 def celery_eager(monkeypatch):
     from app.celery_app import celery as celery_app
     celery_app.conf.task_always_eager = True

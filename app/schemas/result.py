@@ -1,9 +1,11 @@
 import json
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class DocumentResultResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     word_count: int
     line_count: int
     keywords: list[str]

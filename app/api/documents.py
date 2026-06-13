@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.db import get_db
-from app.repositories import document_repo, result_repo
+from app.repositories import document_repo
 from app.schemas.document import DocumentListResponse, DocumentResponse, DocumentUploadResponse
 from app.schemas.result import DocumentResultResponse
 from app.services import document_service
@@ -64,7 +64,9 @@ def get_result(document_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Document not found")
     if document.status != "completed":
         raise HTTPException(status_code=409, detail="Document processing not complete")
-    result = result_repo.get_by_document_id(db, document_id)
+    result = document_service.get_result(document_id, db)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Result not found")
     return result
 
 
