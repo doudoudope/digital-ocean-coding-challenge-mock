@@ -435,3 +435,6 @@ Please help me:
 11. Suggest production enhancements after deployment.
 12. Do not generate code yet.
 13. Prefer simplicity over production-grade complexity.
+
+High level design
+https://link.excalidraw.com/l/8rzXlKtSNFV/70Lh348gyyn
