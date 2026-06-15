@@ -25,6 +25,9 @@
       "Bash(gh pr view *)"
     ],
     "deny": [
+      "Edit(./tests/protected/**)",
+      "Write(./tests/protected/**)",
+      "MultiEdit(./tests/protected/**)",
       "Read(./**/.env)",
       "Read(./**/.env.*)",
       "Read(./**/__pycache__/**)",
