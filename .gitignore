@@ -9,7 +9,7 @@ __pycache__/
 .pytest_cache/
 
 # Local tooling
-.claude/
+.claude/*
 !.claude/settings.json
 
 # Scratch files
