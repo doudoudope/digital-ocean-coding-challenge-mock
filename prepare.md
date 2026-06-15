@@ -7,6 +7,52 @@ npm --version
 brew install node
 npm install -g @anthropic-ai/claude-code
 
+ Set up .claude/settings.json with standard guardrails — allow pytest/pip/python/uvicorn/curl/docker/redis-cli/safe git
+  commands, deny git push/commit/rm -rf/.env reads. Update .gitignore to use .claude/* so settings.json gets tracked.
+
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(pip install -r *)",
+      "Bash(python *)",
+      "Bash(pytest *)",
+      "Bash(uvicorn *)",
+      "Bash(curl *)",
+      "Bash(docker build *)",
+      "Bash(docker run *)",
+      "Bash(docker rm *)",
+      "Bash(docker compose up *)",
+      "Bash(docker compose down)",
+      "Bash(docker compose logs *)",
+      "Bash(docker ps *)",
+      "Bash(redis-cli *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git restore *)",
+      "Bash(gh run list *)",
+      "Bash(gh run view *)",
+      "Bash(gh pr view *)"
+    ],
+    "deny": [
+      "Read(./**/.env)",
+      "Read(./**/.env.*)",
+      "Read(./**/__pycache__/**)",
+      "Read(./**/.pytest_cache/**)",
+      "Read(./**/.venv/**)",
+      "Bash(rm -rf *)",
+      "Bash(rm -fr *)",
+      "Bash(git push *)",
+      "Bash(git commit *)",
+      "Bash(git reset --hard *)",
+      "Bash(docker system prune *)"
+    ]
+  }
+}
+
+
 
 
 
